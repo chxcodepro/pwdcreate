@@ -507,18 +507,22 @@
             margin-bottom: 0.5rem;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 0.5rem;
         }
         .list-item-content {
             flex: 1;
-        }
-        .list-item-note {
-            font-weight: bold;
-            margin-bottom: 0.3rem;
+            min-width: 200px;
+            max-width: 100%;
         }
         .list-item-password {
             font-family: 'Courier New', monospace;
             word-break: break-all;
+            background: rgba(0, 0, 0, 0.03);
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.3rem;
         }
         .list-item-actions {
             display: flex;
