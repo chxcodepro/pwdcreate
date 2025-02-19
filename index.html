@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
     <title>高级密码生成器</title>
     <style>
         :root {
@@ -60,6 +60,7 @@
             text-align: center;
             word-break: break-all;
             min-height: 30px;
+            user-select: all; /* 允许一键选择密码 */
         }
 
         .password-display:hover {
@@ -76,11 +77,7 @@
             overflow: hidden;
         }
 
-        .strength-meter::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
+        .strength-meter-bar {
             height: 100%;
             width: 0;
             background: linear-gradient(90deg, #ff4757, #2ed573);
@@ -230,6 +227,27 @@
             color: var(--secondary-color);
         }
 
+        .tooltip {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 1000;
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -20px); }
+            15% { opacity: 1; transform: translate(-50%, 0); }
+            85% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -20px); }
+        }
+
         @media (max-width: 480px) {
             .container {
                 padding: 1rem;
@@ -256,7 +274,9 @@
             </button>
         </div>
         
-        <div class="strength-meter" id="strengthMeter"></div>
+        <div class="strength-meter">
+            <div class="strength-meter-bar" id="strengthMeter"></div>
+        </div>
         
         <div class="options">
             <div class="option">
@@ -305,100 +325,168 @@
     </div>
 
     <script>
+        // 更新密码长度显示
         function updateLengthDisplay(value) {
             document.getElementById('lengthDisplay').textContent = value;
         }
 
+        // 更新密码强度显示
         function updateStrengthMeter(password) {
             const meter = document.getElementById('strengthMeter');
             let strength = 0;
             
+            // 检查密码强度
             if (password.match(/[A-Z]/)) strength += 25;
             if (password.match(/[a-z]/)) strength += 25;
             if (password.match(/[0-9]/)) strength += 25;
             if (password.match(/[^A-Za-z0-9]/)) strength += 25;
             
-            meter.style.setProperty('--strength', `${strength}%`);
-            meter.querySelector('::before').style.width = `${strength}%`;
+            meter.style.width = `${strength}%`;
         }
 
+        // 生成密码
         function generatePassword() {
-            const length = document.getElementById('lengthSlider').value;
-            const hasUpper = document.getElementById('uppercase').checked;
-            const hasLower = document.getElementById('lowercase').checked;
-            const hasNumbers = document.getElementById('numbers').checked;
-            const hasSymbols = document.getElementById('symbols').checked;
+            try {
+                const length = parseInt(document.getElementById('lengthSlider').value);
+                const hasUpper = document.getElementById('uppercase').checked;
+                const hasLower = document.getElementById('lowercase').checked;
+                const hasNumbers = document.getElementById('numbers').checked;
+                const hasSymbols = document.getElementById('symbols').checked;
 
-            const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            const lower = 'abcdefghijklmnopqrstuvwxyz';
-            const numbers = '0123456789';
-            const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+                // 字符集
+                const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                const lower = 'abcdefghijklmnopqrstuvwxyz';
+                const numbers = '0123456789';
+                const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
 
-            let chars = '';
-            if (hasUpper) chars += upper;
-            if (hasLower) chars += lower;
-            if (hasNumbers) chars += numbers;
-            if (hasSymbols) chars += symbols;
+                // 组合可用字符
+                let chars = '';
+                if (hasUpper) chars += upper;
+                if (hasLower) chars += lower;
+                if (hasNumbers) chars += numbers;
+                if (hasSymbols) chars += symbols;
 
-            if (chars === '') {
-                alert('请至少选择一个字符类型！');
-                return;
+                if (chars === '') {
+                    alert('请至少选择一个字符类型！');
+                    return;
+                }
+
+                // 生成密码
+                let password = '';
+                const array = new Uint32Array(length);
+                crypto.getRandomValues(array);
+                
+                for (let i = 0; i < length; i++) {
+                    password += chars[array[i] % chars.length];
+                }
+
+                // 确保密码包含所有选中的字符类型
+                let missingChars = [];
+                if (hasUpper && !password.match(/[A-Z]/)) missingChars.push(upper);
+                if (hasLower && !password.match(/[a-z]/)) missingChars.push(lower);
+                if (hasNumbers && !password.match(/[0-9]/)) missingChars.push(numbers);
+                if (hasSymbols && !password.match(/[^A-Za-z0-9]/)) missingChars.push(symbols);
+
+                // 如果缺少某些字符类型，替换随机位置的字符
+                missingChars.forEach(charSet => {
+                    const pos = Math.floor(Math.random() * password.length);
+                    const char = charSet[Math.floor(Math.random() * charSet.length)];
+                    password = password.substring(0, pos) + char + password.substring(pos + 1);
+                });
+
+                const passwordDisplay = document.getElementById('passwordDisplay');
+                passwordDisplay.innerHTML = password + 
+                    '<button class="copy-btn" onclick="copyPassword()" title="复制密码">📋</button>';
+                
+                updateStrengthMeter(password);
+
+            } catch (error) {
+                console.error('密码生成错误:', error);
+                alert('密码生成过程中出现错误，请重试');
             }
-
-            let password = '';
-            for (let i = 0; i < length; i++) {
-                const randomIndex = Math.floor(Math。random() * chars。length);
-                password += chars[randomIndex];
-            }
-
-            const passwordDisplay = document.getElementById('passwordDisplay');
-            passwordDisplay.innerHTML = password + 
-                '<button class="copy-btn" onclick="copyPassword()" title="复制密码">📋</button>';
-            
-            updateStrengthMeter(password);
         }
 
+        // 复制密码
         function copyPassword() {
             const passwordDisplay = document.getElementById('passwordDisplay');
             const password = passwordDisplay.textContent.replace('📋', '').trim();
             
-            navigator.clipboard.writeText(password).then(() => {
-                // 创建一个临时提示元素
-                const tooltip = document.createElement('div');
-                tooltip.textContent = '已复制到剪贴板！';
-                tooltip.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: var(--primary-color);
-                    color: white;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                    font-size: 14px;
-                    z-index: 1000;
-                    animation: fadeInOut 2s ease-in-out;
-                `;
-                
-                document.body.appendChild(tooltip);
-                
-                // 2秒后移除提示
-                setTimeout(() => {
-                    document.body.removeChild(tooltip);
-                }, 2000);
-            }).catch(err => {
-                console.error('复制失败:'， err);
-            });
-        }
-    </script>
+            // 使用传统的复制方法
+            const tempInput = document.createElement('textarea');
+            tempInput.style.position = 'absolute';
+            tempInput.style.left = '-9999px';
+            tempInput.value = password;
+            document.body.appendChild(tempInput);
 
-    <style>
-        @keyframes fadeInOut {
-            0% { opacity: 0; transform: translate(-50%, -20px); }
-            15% { opacity: 1; transform: translate(-50%, 0); }
-            85% { opacity: 1; transform: translate(-50%, 0); }
-            100% { opacity: 0; transform: translate(-50%, -20px); }
+            try {
+                tempInput.select();
+                document.execCommand('copy');
+                showTooltip('已复制到剪贴板！');
+            } catch (err) {
+                console.error('复制失败:', err);
+                showTooltip('复制失败，请手动复制');
+            } finally {
+                document.body.removeChild(tempInput);
+            }
+
+            // 如果支持现代API，也尝试使用
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(password).catch(err => {
+                    console.error('剪贴板API失败:', err);
+                });
+            }
         }
-    </style>
+
+        // 显示提示信息
+        function showTooltip(message) {
+            const existingTooltip = document.querySelector('.tooltip');
+            if (existingTooltip) {
+                document.body.removeChild(existingTooltip);
+            }
+
+            const tooltip = document.createElement('div');
+                       tooltip.className = 'tooltip';
+            tooltip.textContent = message;
+            document.body.appendChild(tooltip);
+
+            // 2秒后移除提示
+            setTimeout(() => {
+                if (tooltip.parentNode === document.body) {
+                    document.body.removeChild(tooltip);
+                }
+            }, 2000);
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化密码长度显示
+            updateLengthDisplay(document.getElementById('lengthSlider').value);
+            
+            // 为所有选项添加键盘访问支持
+            document.querySelectorAll('.option').forEach(option => {
+                option.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        const checkbox = this.querySelector('input[type="checkbox"]');
+                        checkbox.checked = !checkbox.checked;
+                        e.preventDefault();
+                    }
+                });
+            });
+
+            // 添加键盘快捷键支持
+            document.addEventListener('keydown', function(e) {
+                // Alt + G 生成新密码
+                if (e.altKey && e.key === 'g') {
+                    e.preventDefault();
+                    generatePassword();
+                }
+                // Alt + C 复制密码
+                else if (e.altKey && e.key === 'c') {
+                    e.preventDefault();
+                    copyPassword();
+                }
+            });
+        });
+    </script>
 </body>
 </html>
